@@ -11,6 +11,7 @@ It is intentionally separate from the planner source repository.
 - Vercel-hosted Next.js app
 - server-side API routes that talk to GitHub Actions
 - GitHub Actions remains the hidden execution backend
+- guided experiment catalog so users see curated purpose, weight, and benchmark focus before launching a run
 
 ## Required Environment Variables
 

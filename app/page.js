@@ -2,13 +2,32 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { SET_OPTIONS, SINGLE_OPTIONS } from "@/lib/options";
+import {
+  getPresetOption,
+  getSingleOption,
+  getSingleOptionsForKind,
+  SET_OPTIONS,
+  SINGLE_OPTIONS,
+  SURFACE_INFO,
+  WEIGHT_INFO,
+} from "@/lib/options";
 
 const singleKinds = Object.keys(SINGLE_OPTIONS);
 
 function pickDefaultName(kind) {
-  const options = SINGLE_OPTIONS[kind] || [];
-  return options[0] || "";
+  const options = getSingleOptionsForKind(kind);
+  return options[0]?.name || "";
+}
+
+function groupByCategory(items) {
+  return items.reduce((groups, item) => {
+    const key = item.category || "Other";
+    if (!groups[key]) {
+      groups[key] = [];
+    }
+    groups[key].push(item);
+    return groups;
+  }, {});
 }
 
 function renderInline(text) {
@@ -89,6 +108,11 @@ function renderSummary(markdown) {
   return nodes;
 }
 
+function WeightBadge({ weight }) {
+  const info = WEIGHT_INFO[weight];
+  return <span style={styles.badge}>{info?.label || weight}</span>;
+}
+
 export default function HomePage() {
   const [mode, setMode] = useState("single");
   const [kind, setKind] = useState("status");
@@ -98,7 +122,14 @@ export default function HomePage() {
   const [error, setError] = useState("");
   const [run, setRun] = useState(null);
 
-  const singleNames = useMemo(() => SINGLE_OPTIONS[kind] || [], [kind]);
+  const singleOptions = useMemo(() => getSingleOptionsForKind(kind), [kind]);
+  const groupedSingleOptions = useMemo(() => groupByCategory(singleOptions), [singleOptions]);
+  const selectedSingle = useMemo(() => getSingleOption(kind, name), [kind, name]);
+  const selectedPreset = useMemo(() => getPresetOption(preset), [preset]);
+  const recommendedSingles = useMemo(
+    () => singleOptions.filter((item) => item.recommended).slice(0, 3),
+    [singleOptions],
+  );
 
   useEffect(() => {
     setName(pickDefaultName(kind));
@@ -136,10 +167,7 @@ export default function HomePage() {
     setError("");
     setRun(null);
 
-    const payload =
-      mode === "single"
-        ? { mode, kind, name }
-        : { mode, preset };
+    const payload = mode === "single" ? { mode, kind, name } : { mode, preset };
 
     const response = await fetch("/api/run", {
       method: "POST",
@@ -167,8 +195,8 @@ export default function HomePage() {
         <h1 style={styles.title}>Run Curated AbTweak Experiments</h1>
         <p style={styles.lead}>
           This UI hides the GitHub Actions execution backend and exposes only
-          the curated AbTweak experiment choices. Start a single experiment or a
-          preset experiment set, then watch the result return here.
+          the curated AbTweak experiment choices. Pick a surface, review what it
+          does, then launch a remote run and read the returned summary here.
         </p>
         <div style={styles.heroMeta}>
           <div style={styles.metaCard}>
@@ -187,6 +215,7 @@ export default function HomePage() {
       </section>
 
       <section style={styles.panel}>
+        <h2 style={styles.sectionTitle}>Choose experiment type</h2>
         <div style={styles.modeRow}>
           <button
             type="button"
@@ -204,60 +233,161 @@ export default function HomePage() {
           </button>
         </div>
 
-        <form onSubmit={onSubmit} style={styles.form}>
-          {mode === "single" ? (
-            <>
+        <p style={styles.muted}>
+          Curated choices only. No arbitrary shell or Lisp input is exposed in
+          this UI.
+        </p>
+
+        {mode === "single" ? (
+          <>
+            <div style={styles.form}>
               <label style={styles.label}>
                 Surface
                 <select value={kind} onChange={(event) => setKind(event.target.value)} style={styles.select}>
                   {singleKinds.map((item) => (
                     <option key={item} value={item}>
-                      {item}
+                      {SURFACE_INFO[item]?.title || item}
                     </option>
                   ))}
                 </select>
               </label>
-              <label style={styles.label}>
-                Curated name
-                <select value={name} onChange={(event) => setName(event.target.value)} style={styles.select}>
-                  {singleNames.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </>
-          ) : (
-            <label style={styles.label}>
-              Preset set
-              <select value={preset} onChange={(event) => setPreset(event.target.value)} style={styles.select}>
-                {SET_OPTIONS.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+              <div style={styles.surfaceSummary}>
+                <div style={styles.metaLabel}>What this surface is for</div>
+                <div style={styles.surfaceTitle}>{SURFACE_INFO[kind]?.title}</div>
+                <p style={styles.surfaceText}>{SURFACE_INFO[kind]?.description}</p>
+                <p style={styles.surfaceHint}>{SURFACE_INFO[kind]?.audience}</p>
+              </div>
+            </div>
 
+            {recommendedSingles.length ? (
+              <div style={styles.catalogBlock}>
+                <div style={styles.catalogHeader}>
+                  <h3 style={styles.catalogTitle}>Recommended starting points</h3>
+                  <p style={styles.catalogLead}>
+                    These are the easiest ways to learn the surface without guessing.
+                  </p>
+                </div>
+                <div style={styles.optionGrid}>
+                  {recommendedSingles.map((item) => {
+                    const selected = item.name === name;
+                    return (
+                      <button
+                        key={`recommended-${item.name}`}
+                        type="button"
+                        onClick={() => setName(item.name)}
+                        style={{
+                          ...styles.optionCard,
+                          ...(selected ? styles.optionCardSelected : null),
+                        }}
+                      >
+                        <div style={styles.optionHeader}>
+                          <span style={styles.optionTitle}>{item.title}</span>
+                          <WeightBadge weight={item.weight} />
+                        </div>
+                        <div style={styles.optionMeta}>{item.category}</div>
+                        <p style={styles.optionText}>{item.description}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {Object.entries(groupedSingleOptions).map(([category, items]) => (
+              <div key={category} style={styles.catalogBlock}>
+                <div style={styles.catalogHeader}>
+                  <h3 style={styles.catalogTitle}>{category}</h3>
+                </div>
+                <div style={styles.optionGrid}>
+                  {items.map((item) => {
+                    const selected = item.name === name;
+                    return (
+                      <button
+                        key={item.name}
+                        type="button"
+                        onClick={() => setName(item.name)}
+                        style={{
+                          ...styles.optionCard,
+                          ...(selected ? styles.optionCardSelected : null),
+                        }}
+                      >
+                        <div style={styles.optionHeader}>
+                          <span style={styles.optionTitle}>{item.title}</span>
+                          <WeightBadge weight={item.weight} />
+                        </div>
+                        <p style={styles.optionText}>{item.description}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+
+            {selectedSingle ? (
+              <div style={styles.selectionSummary}>
+                <div style={styles.metaLabel}>Selected experiment</div>
+                <div style={styles.selectionTitle}>{selectedSingle.title}</div>
+                <p style={styles.selectionText}>{selectedSingle.description}</p>
+                <div style={styles.selectionMetaRow}>
+                  <span style={styles.selectionMetaChip}>{selectedSingle.category}</span>
+                  <span style={styles.selectionMetaChip}>
+                    {WEIGHT_INFO[selectedSingle.weight]?.label}
+                  </span>
+                  <span style={styles.selectionMetaChip}>Surface: {SURFACE_INFO[kind]?.title}</span>
+                </div>
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <p style={styles.muted}>
+              Preset sets run a small, maintained bundle of related commands so you can get a focused picture with one click.
+            </p>
+            <div style={styles.optionGrid}>
+              {SET_OPTIONS.map((item) => {
+                const selected = item.id === preset;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setPreset(item.id)}
+                    style={{
+                      ...styles.optionCard,
+                      ...(selected ? styles.optionCardSelected : null),
+                    }}
+                  >
+                    <div style={styles.optionHeader}>
+                      <span style={styles.optionTitle}>{item.title}</span>
+                      <WeightBadge weight={item.weight} />
+                    </div>
+                    <div style={styles.optionMeta}>{item.category}</div>
+                    <p style={styles.optionText}>{item.description}</p>
+                  </button>
+                );
+              })}
+            </div>
+
+            {selectedPreset ? (
+              <div style={styles.selectionSummary}>
+                <div style={styles.metaLabel}>Selected preset</div>
+                <div style={styles.selectionTitle}>{selectedPreset.title}</div>
+                <p style={styles.selectionText}>{selectedPreset.description}</p>
+                <div style={styles.selectionMetaRow}>
+                  <span style={styles.selectionMetaChip}>{selectedPreset.category}</span>
+                  <span style={styles.selectionMetaChip}>
+                    {WEIGHT_INFO[selectedPreset.weight]?.label}
+                  </span>
+                </div>
+              </div>
+            ) : null}
+          </>
+        )}
+
+        <form onSubmit={onSubmit} style={styles.submitRow}>
           <button type="submit" disabled={submitting} style={styles.submit}>
             {submitting ? "Starting..." : "Run experiment"}
           </button>
         </form>
-
-        {mode === "set" ? (
-          <div style={styles.note}>
-            {
-              SET_OPTIONS.find((item) => item.id === preset)?.description
-            }
-          </div>
-        ) : (
-          <div style={styles.note}>
-            Curated choices only. No arbitrary shell or Lisp input is exposed in
-            this UI.
-          </div>
-        )}
 
         {error ? <div style={styles.error}>{error}</div> : null}
       </section>
@@ -266,7 +396,7 @@ export default function HomePage() {
         <h2 style={styles.sectionTitle}>Run status</h2>
         {!run ? (
           <p style={styles.muted}>
-            No run started yet. Submit a curated experiment above to begin.
+            No run started yet. Choose a curated experiment above to begin.
           </p>
         ) : (
           <div style={styles.results}>
@@ -417,9 +547,10 @@ const styles = {
   },
   form: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gridTemplateColumns: "minmax(240px, 280px) minmax(0, 1fr)",
     gap: 16,
-    alignItems: "end",
+    alignItems: "stretch",
+    marginTop: 16,
   },
   label: {
     display: "flex",
@@ -435,6 +566,132 @@ const styles = {
     color: "var(--text)",
     padding: "12px 14px",
   },
+  surfaceSummary: {
+    padding: "16px 18px",
+    borderRadius: 18,
+    background: "rgba(255, 255, 255, 0.05)",
+    border: "1px solid rgba(255, 255, 255, 0.08)",
+  },
+  surfaceTitle: {
+    fontSize: 20,
+    fontWeight: 600,
+    marginBottom: 8,
+  },
+  surfaceText: {
+    margin: "0 0 10px",
+    color: "var(--text)",
+    lineHeight: 1.6,
+  },
+  surfaceHint: {
+    margin: 0,
+    color: "var(--muted)",
+    lineHeight: 1.6,
+  },
+  catalogBlock: {
+    marginTop: 22,
+  },
+  catalogHeader: {
+    marginBottom: 12,
+  },
+  catalogTitle: {
+    margin: "0 0 6px",
+    fontSize: 18,
+    letterSpacing: "-0.02em",
+  },
+  catalogLead: {
+    margin: 0,
+    color: "var(--muted)",
+    lineHeight: 1.6,
+  },
+  optionGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: 14,
+  },
+  optionCard: {
+    padding: "16px 18px",
+    borderRadius: 18,
+    border: "1px solid rgba(255, 255, 255, 0.1)",
+    background: "rgba(255, 255, 255, 0.04)",
+    color: "var(--text)",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+  optionCardSelected: {
+    border: "1px solid rgba(121, 184, 255, 0.42)",
+    background: "rgba(121, 184, 255, 0.12)",
+    boxShadow: "0 0 0 1px rgba(121, 184, 255, 0.18) inset",
+  },
+  optionHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    marginBottom: 8,
+  },
+  optionTitle: {
+    fontSize: 17,
+    fontWeight: 600,
+    lineHeight: 1.3,
+  },
+  optionMeta: {
+    marginBottom: 8,
+    color: "#8fb3cc",
+    fontSize: 12,
+    letterSpacing: ".1em",
+    textTransform: "uppercase",
+  },
+  optionText: {
+    margin: 0,
+    color: "var(--muted)",
+    lineHeight: 1.6,
+  },
+  badge: {
+    display: "inline-flex",
+    alignItems: "center",
+    whiteSpace: "nowrap",
+    padding: "4px 8px",
+    borderRadius: 999,
+    background: "rgba(255, 255, 255, 0.08)",
+    color: "#d7ecff",
+    fontSize: 11,
+    letterSpacing: ".08em",
+    textTransform: "uppercase",
+  },
+  selectionSummary: {
+    marginTop: 22,
+    padding: "16px 18px",
+    borderRadius: 18,
+    background: "rgba(255, 255, 255, 0.05)",
+    border: "1px solid rgba(255, 255, 255, 0.08)",
+  },
+  selectionTitle: {
+    fontSize: 22,
+    fontWeight: 700,
+    marginBottom: 8,
+  },
+  selectionText: {
+    margin: "0 0 14px",
+    color: "var(--muted)",
+    lineHeight: 1.6,
+  },
+  selectionMetaRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  selectionMetaChip: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "6px 10px",
+    borderRadius: 999,
+    background: "rgba(255, 255, 255, 0.08)",
+    color: "#d7ecff",
+    fontSize: 12,
+  },
+  submitRow: {
+    marginTop: 22,
+  },
   submit: {
     padding: "12px 18px",
     borderRadius: 999,
@@ -442,11 +699,7 @@ const styles = {
     background: "rgba(121, 184, 255, 0.18)",
     color: "var(--text)",
     cursor: "pointer",
-  },
-  note: {
-    marginTop: 16,
-    color: "var(--muted)",
-    lineHeight: 1.6,
+    minWidth: 200,
   },
   error: {
     marginTop: 16,
@@ -520,13 +773,13 @@ const styles = {
   },
   list: {
     margin: 0,
-    paddingLeft: 18,
+    paddingLeft: 20,
     color: "var(--muted)",
-    lineHeight: 1.7,
+    lineHeight: 1.8,
   },
   artifactLink: {
-    color: "#d9f7ff",
-    fontWeight: 700,
+    color: "#dff6ff",
+    fontWeight: 600,
     textDecoration: "none",
   },
 };
