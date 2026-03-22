@@ -690,6 +690,9 @@ const styles = {
   metaValue: {
     fontSize: 18,
     fontWeight: 600,
+    lineHeight: 1.25,
+    overflowWrap: "anywhere",
+    wordBreak: "break-word",
   },
   panel: {
     marginTop: 22,
