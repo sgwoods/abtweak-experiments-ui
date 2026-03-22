@@ -11,11 +11,82 @@ function pickDefaultName(kind) {
   return options[0] || "";
 }
 
+function renderInline(text) {
+  const parts = text.split(/(`[^`]+`)/g).filter(Boolean);
+  return parts.map((part, index) => {
+    if (part.startsWith("`") && part.endsWith("`")) {
+      return (
+        <code key={`${part}-${index}`} style={styles.inlineCode}>
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    return <span key={`${part}-${index}`}>{part}</span>;
+  });
+}
+
 function renderSummary(markdown) {
-  return markdown
-    .split("\n")
-    .filter(Boolean)
-    .map((line, index) => <div key={`${index}-${line}`}>{line}</div>);
+  const lines = markdown.split("\n");
+  const nodes = [];
+  let listItems = [];
+
+  function flushList(keyBase) {
+    if (!listItems.length) {
+      return;
+    }
+    nodes.push(
+      <ul key={`list-${keyBase}`} style={styles.summaryList}>
+        {listItems.map((item, index) => (
+          <li key={`${keyBase}-${index}`}>{renderInline(item)}</li>
+        ))}
+      </ul>,
+    );
+    listItems = [];
+  }
+
+  lines.forEach((rawLine, index) => {
+    const line = rawLine.trimEnd();
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      flushList(index);
+      return;
+    }
+
+    if (trimmed.startsWith("- ")) {
+      listItems.push(trimmed.slice(2));
+      return;
+    }
+
+    flushList(index);
+
+    if (trimmed.startsWith("# ")) {
+      nodes.push(
+        <h3 key={`h1-${index}`} style={styles.summaryHeading}>
+          {renderInline(trimmed.slice(2))}
+        </h3>,
+      );
+      return;
+    }
+
+    if (trimmed.endsWith(":")) {
+      nodes.push(
+        <div key={`label-${index}`} style={styles.summaryLabel}>
+          {renderInline(trimmed.slice(0, -1))}
+        </div>,
+      );
+      return;
+    }
+
+    nodes.push(
+      <p key={`p-${index}`} style={styles.summaryParagraph}>
+        {renderInline(trimmed)}
+      </p>,
+    );
+  });
+
+  flushList("tail");
+  return nodes;
 }
 
 export default function HomePage() {
@@ -233,7 +304,13 @@ export default function HomePage() {
                 <ul style={styles.list}>
                   {run.artifacts.map((artifact) => (
                     <li key={artifact.id}>
-                      <strong>{artifact.name}</strong> ({artifact.sizeInBytes} bytes)
+                      <a
+                        href={`/api/run/${run.runId || run.id}/artifact/${artifact.id}`}
+                        style={styles.artifactLink}
+                      >
+                        {artifact.name}
+                      </a>{" "}
+                      ({artifact.sizeInBytes} bytes)
                     </li>
                   ))}
                 </ul>
@@ -407,12 +484,49 @@ const styles = {
   summaryText: {
     color: "var(--muted)",
     lineHeight: 1.6,
-    whiteSpace: "pre-wrap",
+  },
+  summaryHeading: {
+    margin: "0 0 12px",
+    fontSize: 20,
+    color: "var(--text)",
+    letterSpacing: "-0.02em",
+  },
+  summaryLabel: {
+    margin: "12px 0 6px",
+    color: "var(--text)",
+    fontWeight: 600,
+    letterSpacing: ".04em",
+    textTransform: "uppercase",
+    fontSize: 12,
+  },
+  summaryParagraph: {
+    margin: "0 0 10px",
+    color: "var(--muted)",
+    lineHeight: 1.6,
+  },
+  summaryList: {
+    margin: "0 0 10px",
+    paddingLeft: 20,
+    color: "var(--muted)",
+    lineHeight: 1.7,
+  },
+  inlineCode: {
+    fontFamily: '"SFMono-Regular", "Menlo", monospace',
+    fontSize: "0.92em",
+    padding: "2px 6px",
+    borderRadius: 8,
+    background: "rgba(255,255,255,0.08)",
+    color: "#e7f6ff",
   },
   list: {
     margin: 0,
     paddingLeft: 18,
     color: "var(--muted)",
     lineHeight: 1.7,
+  },
+  artifactLink: {
+    color: "#d9f7ff",
+    fontWeight: 700,
+    textDecoration: "none",
   },
 };
