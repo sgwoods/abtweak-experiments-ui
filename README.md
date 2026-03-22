@@ -12,6 +12,7 @@ It is intentionally separate from the planner source repository.
 - server-side API routes that talk to GitHub Actions
 - GitHub Actions remains the hidden execution backend
 - guided experiment catalog so users see curated purpose, weight, and benchmark focus before launching a run
+- in-page readable artifact previews for markdown, JSON, and text-style outputs
 
 ## Required Environment Variables
 

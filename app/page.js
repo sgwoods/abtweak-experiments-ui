@@ -121,6 +121,8 @@ export default function HomePage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [run, setRun] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const singleOptions = useMemo(() => getSingleOptionsForKind(kind), [kind]);
   const groupedSingleOptions = useMemo(() => groupByCategory(singleOptions), [singleOptions]);
@@ -166,6 +168,7 @@ export default function HomePage() {
     setSubmitting(true);
     setError("");
     setRun(null);
+    setPreview(null);
 
     const payload = mode === "single" ? { mode, kind, name } : { mode, preset };
 
@@ -186,6 +189,28 @@ export default function HomePage() {
     }
 
     setRun(data);
+  }
+
+  async function onPreviewArtifact(artifactId, entryName) {
+    setPreviewLoading(true);
+    setError("");
+
+    const response = await fetch(
+      `/api/run/${run.runId || run.id}/artifact/${artifactId}/preview?entry=${encodeURIComponent(entryName)}`,
+      { cache: "no-store" },
+    );
+    const data = await response.json();
+    setPreviewLoading(false);
+
+    if (!response.ok) {
+      setError(data.error || "Failed to preview artifact entry.");
+      return;
+    }
+
+    setPreview({
+      artifactId,
+      ...data,
+    });
   }
 
   return (
@@ -431,19 +456,69 @@ export default function HomePage() {
             {run.artifacts?.length ? (
               <div style={styles.summaryBox}>
                 <div style={styles.metaLabel}>Artifacts prepared</div>
-                <ul style={styles.list}>
+                <div style={styles.artifactStack}>
                   {run.artifacts.map((artifact) => (
-                    <li key={artifact.id}>
-                      <a
-                        href={`/api/run/${run.runId || run.id}/artifact/${artifact.id}`}
-                        style={styles.artifactLink}
-                      >
-                        {artifact.name}
-                      </a>{" "}
-                      ({artifact.sizeInBytes} bytes)
-                    </li>
+                    <div key={artifact.id} style={styles.artifactCard}>
+                      <div style={styles.artifactCardHeader}>
+                        <div>
+                          <a
+                            href={`/api/run/${run.runId || run.id}/artifact/${artifact.id}`}
+                            style={styles.artifactLink}
+                          >
+                            {artifact.name}
+                          </a>{" "}
+                          <span style={styles.artifactSize}>({artifact.sizeInBytes} bytes)</span>
+                        </div>
+                        <span style={styles.badge}>
+                          {artifact.entries?.filter((entry) => entry.previewable).length || 0} previewable
+                        </span>
+                      </div>
+                      {artifact.entries?.length ? (
+                        <ul style={styles.artifactEntryList}>
+                          {artifact.entries.map((entry) => (
+                            <li key={`${artifact.id}-${entry.name}`} style={styles.artifactEntry}>
+                              <span style={styles.artifactEntryName}>{entry.name}</span>
+                              <div style={styles.artifactEntryActions}>
+                                {entry.previewable ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => onPreviewArtifact(artifact.id, entry.name)}
+                                    style={styles.previewButton}
+                                  >
+                                    Preview
+                                  </button>
+                                ) : null}
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p style={styles.muted}>No readable entry listing extracted for this artifact yet.</p>
+                      )}
+                    </div>
                   ))}
-                </ul>
+                </div>
+              </div>
+            ) : null}
+
+            {preview || previewLoading ? (
+              <div style={styles.summaryBox}>
+                <div style={styles.metaLabel}>Artifact preview</div>
+                {previewLoading ? (
+                  <p style={styles.muted}>Loading preview...</p>
+                ) : preview ? (
+                  <>
+                    <div style={styles.previewHeader}>
+                      <div style={styles.previewTitle}>{preview.name}</div>
+                      <span style={styles.badge}>{preview.format}</span>
+                    </div>
+                    {preview.format === "markdown" ? (
+                      <div style={styles.summaryText}>{renderSummary(preview.content)}</div>
+                    ) : (
+                      <pre style={styles.previewBlock}>{preview.content}</pre>
+                    )}
+                  </>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -734,6 +809,86 @@ const styles = {
     background: "rgba(255, 255, 255, 0.05)",
     border: "1px solid rgba(255, 255, 255, 0.08)",
   },
+  artifactStack: {
+    display: "grid",
+    gap: 14,
+  },
+  artifactCard: {
+    padding: "14px 16px",
+    borderRadius: 16,
+    background: "rgba(255, 255, 255, 0.03)",
+    border: "1px solid rgba(255, 255, 255, 0.08)",
+  },
+  artifactCardHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  artifactSize: {
+    color: "var(--muted)",
+  },
+  artifactEntryList: {
+    listStyle: "none",
+    margin: 0,
+    padding: 0,
+    display: "grid",
+    gap: 8,
+  },
+  artifactEntry: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    padding: "10px 12px",
+    borderRadius: 12,
+    background: "rgba(255, 255, 255, 0.04)",
+  },
+  artifactEntryName: {
+    color: "var(--text)",
+    fontFamily: '"SFMono-Regular", "Menlo", monospace',
+    fontSize: 13,
+    wordBreak: "break-all",
+  },
+  artifactEntryActions: {
+    display: "flex",
+    gap: 8,
+    alignItems: "center",
+  },
+  previewButton: {
+    padding: "7px 12px",
+    borderRadius: 999,
+    border: "1px solid rgba(121, 184, 255, 0.28)",
+    background: "rgba(121, 184, 255, 0.12)",
+    color: "var(--text)",
+    cursor: "pointer",
+  },
+  previewHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  previewTitle: {
+    fontSize: 18,
+    fontWeight: 600,
+    wordBreak: "break-all",
+  },
+  previewBlock: {
+    margin: 0,
+    padding: "14px 16px",
+    borderRadius: 14,
+    background: "rgba(5, 12, 18, 0.8)",
+    color: "#dff6ff",
+    overflowX: "auto",
+    fontFamily: '"SFMono-Regular", "Menlo", monospace',
+    fontSize: 13,
+    lineHeight: 1.6,
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+  },
   summaryText: {
     color: "var(--muted)",
     lineHeight: 1.6,
@@ -770,12 +925,6 @@ const styles = {
     borderRadius: 8,
     background: "rgba(255,255,255,0.08)",
     color: "#e7f6ff",
-  },
-  list: {
-    margin: 0,
-    paddingLeft: 20,
-    color: "var(--muted)",
-    lineHeight: 1.8,
   },
   artifactLink: {
     color: "#dff6ff",

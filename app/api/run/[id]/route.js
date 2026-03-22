@@ -1,29 +1,7 @@
-import JSZip from "jszip";
 import { NextResponse } from "next/server";
 
-import {
-  downloadArtifactZip,
-  getWorkflowRun,
-  listRunArtifacts,
-} from "@/lib/github";
-
-async function extractSummary(artifacts) {
-  if (!artifacts.length) {
-    return null;
-  }
-
-  const zipBuffer = await downloadArtifactZip(artifacts[0].id);
-  const zip = await JSZip.loadAsync(Buffer.from(zipBuffer));
-  const summaryEntry = Object.values(zip.files).find(
-    (entry) => !entry.dir && entry.name.endsWith("summary.md"),
-  );
-
-  if (!summaryEntry) {
-    return null;
-  }
-
-  return summaryEntry.async("string");
-}
+import { extractArtifactSummary, listArtifactEntries } from "@/lib/artifacts";
+import { getWorkflowRun, listRunArtifacts } from "@/lib/github";
 
 export async function GET(_request, context) {
   try {
@@ -33,12 +11,25 @@ export async function GET(_request, context) {
     const artifacts = artifactResponse.artifacts || [];
 
     let summaryMarkdown = null;
+    let artifactEntries = {};
     if (run.status === "completed" && artifacts.length > 0) {
       try {
-        summaryMarkdown = await extractSummary(artifacts);
+        summaryMarkdown = await extractArtifactSummary(artifacts[0].id);
       } catch (_error) {
         summaryMarkdown = null;
       }
+
+      artifactEntries = Object.fromEntries(
+        await Promise.all(
+          artifacts.map(async (artifact) => {
+            try {
+              return [artifact.id, await listArtifactEntries(artifact.id)];
+            } catch (_error) {
+              return [artifact.id, []];
+            }
+          }),
+        ),
+      );
     }
 
     return NextResponse.json({
@@ -55,6 +46,7 @@ export async function GET(_request, context) {
         sizeInBytes: artifact.size_in_bytes,
         expired: artifact.expired,
         createdAt: artifact.created_at,
+        entries: artifactEntries[artifact.id] || [],
       })),
       summaryMarkdown,
     });
