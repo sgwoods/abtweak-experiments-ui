@@ -224,8 +224,16 @@ export default function HomePage() {
 
   return (
     <main style={styles.shell}>
+      <section style={styles.topbarWrap}>
+        <div style={styles.topbar}>
+          <span style={styles.eyebrow}>Remote Experiments</span>
+          <a style={styles.siteHomeLink} href="https://sgwoods.github.io/public/mmath-renovation.html">
+            MMath Project
+          </a>
+        </div>
+      </section>
+
       <section style={styles.hero}>
-        <div style={styles.eyebrow}>AbTweak Remote Experiments</div>
         <h1 style={styles.title}>Run Curated AbTweak Experiments</h1>
         <p style={styles.lead}>
           This UI hides the GitHub Actions execution backend and exposes only
@@ -595,7 +603,23 @@ const styles = {
   shell: {
     maxWidth: 1100,
     margin: "0 auto",
-    padding: "32px 20px 64px",
+    padding: "0 20px 64px",
+  },
+  topbarWrap: {
+    borderTop: "1px solid rgba(177, 222, 255, 0.18)",
+    borderBottom: "1px solid rgba(177, 222, 255, 0.18)",
+    background: "rgba(7, 19, 31, 0.16)",
+    marginBottom: 26,
+  },
+  topbar: {
+    maxWidth: 1100,
+    margin: "0 auto",
+    padding: "26px 20px 30px",
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 18,
   },
   hero: {
     border: "1px solid rgba(177, 222, 255, 0.18)",
@@ -615,6 +639,20 @@ const styles = {
     color: "#d7ecff",
     fontSize: 12,
     letterSpacing: ".14em",
+    textTransform: "uppercase",
+  },
+  siteHomeLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "16px 28px",
+    borderRadius: 999,
+    background: "rgba(255, 255, 255, 0.08)",
+    border: "1px solid rgba(177, 222, 255, 0.18)",
+    color: "#d7ecff",
+    textDecoration: "none",
+    fontSize: 13,
+    letterSpacing: ".1em",
     textTransform: "uppercase",
   },
   title: {
