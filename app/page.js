@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import {
+  getDomainInfo,
   getPresetOption,
   getSingleOption,
   getSingleOptionsForKind,
@@ -21,7 +22,7 @@ function pickDefaultName(kind) {
 
 function groupByCategory(items) {
   return items.reduce((groups, item) => {
-    const key = item.category || "Other";
+    const key = getDomainInfo(item.domain).title;
     if (!groups[key]) {
       groups[key] = [];
     }
@@ -128,6 +129,14 @@ export default function HomePage() {
   const groupedSingleOptions = useMemo(() => groupByCategory(singleOptions), [singleOptions]);
   const selectedSingle = useMemo(() => getSingleOption(kind, name), [kind, name]);
   const selectedPreset = useMemo(() => getPresetOption(preset), [preset]);
+  const selectedSingleDomain = useMemo(
+    () => (selectedSingle ? getDomainInfo(selectedSingle.domain) : null),
+    [selectedSingle],
+  );
+  const selectedPresetDomain = useMemo(
+    () => (selectedPreset ? getDomainInfo(selectedPreset.domain) : null),
+    [selectedPreset],
+  );
   const recommendedSingles = useMemo(
     () => singleOptions.filter((item) => item.recommended).slice(0, 3),
     [singleOptions],
@@ -309,7 +318,9 @@ export default function HomePage() {
                           <span style={styles.optionTitle}>{item.title}</span>
                           <WeightBadge weight={item.weight} />
                         </div>
-                        <div style={styles.optionMeta}>{item.category}</div>
+                        <div style={styles.optionMeta}>
+                          {getDomainInfo(item.domain).title} · {item.category}
+                        </div>
                         <p style={styles.optionText}>{item.description}</p>
                       </button>
                     );
@@ -322,6 +333,9 @@ export default function HomePage() {
               <div key={category} style={styles.catalogBlock}>
                 <div style={styles.catalogHeader}>
                   <h3 style={styles.catalogTitle}>{category}</h3>
+                  <p style={styles.catalogLead}>
+                    {items[0] ? getDomainInfo(items[0].domain).overview : ""}
+                  </p>
                 </div>
                 <div style={styles.optionGrid}>
                   {items.map((item) => {
@@ -340,6 +354,7 @@ export default function HomePage() {
                           <span style={styles.optionTitle}>{item.title}</span>
                           <WeightBadge weight={item.weight} />
                         </div>
+                        <div style={styles.optionMeta}>{item.category}</div>
                         <p style={styles.optionText}>{item.description}</p>
                       </button>
                     );
@@ -358,7 +373,30 @@ export default function HomePage() {
                   <span style={styles.selectionMetaChip}>
                     {WEIGHT_INFO[selectedSingle.weight]?.label}
                   </span>
+                  <span style={styles.selectionMetaChip}>{selectedSingleDomain?.title}</span>
                   <span style={styles.selectionMetaChip}>Surface: {SURFACE_INFO[kind]?.title}</span>
+                </div>
+              </div>
+            ) : null}
+
+            {selectedSingleDomain ? (
+              <div style={styles.summaryBox}>
+                <div style={styles.metaLabel}>Domain snapshot</div>
+                <div style={styles.previewTitle}>{selectedSingleDomain.title}</div>
+                <p style={styles.selectionText}>{selectedSingleDomain.overview}</p>
+                <div style={styles.domainGrid}>
+                  <div style={styles.domainCard}>
+                    <div style={styles.metaLabel}>Domain</div>
+                    <p style={styles.domainText}>{selectedSingleDomain.overview}</p>
+                  </div>
+                  <div style={styles.domainCard}>
+                    <div style={styles.metaLabel}>Starting state</div>
+                    <pre style={styles.domainBlock}>{selectedSingleDomain.initial}</pre>
+                  </div>
+                  <div style={styles.domainCard}>
+                    <div style={styles.metaLabel}>Goal state</div>
+                    <pre style={styles.domainBlock}>{selectedSingleDomain.goal}</pre>
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -385,7 +423,9 @@ export default function HomePage() {
                       <span style={styles.optionTitle}>{item.title}</span>
                       <WeightBadge weight={item.weight} />
                     </div>
-                    <div style={styles.optionMeta}>{item.category}</div>
+                    <div style={styles.optionMeta}>
+                      {getDomainInfo(item.domain).title} · {item.category}
+                    </div>
                     <p style={styles.optionText}>{item.description}</p>
                   </button>
                 );
@@ -398,10 +438,33 @@ export default function HomePage() {
                 <div style={styles.selectionTitle}>{selectedPreset.title}</div>
                 <p style={styles.selectionText}>{selectedPreset.description}</p>
                 <div style={styles.selectionMetaRow}>
+                  <span style={styles.selectionMetaChip}>{selectedPresetDomain?.title}</span>
                   <span style={styles.selectionMetaChip}>{selectedPreset.category}</span>
                   <span style={styles.selectionMetaChip}>
                     {WEIGHT_INFO[selectedPreset.weight]?.label}
                   </span>
+                </div>
+              </div>
+            ) : null}
+
+            {selectedPresetDomain ? (
+              <div style={styles.summaryBox}>
+                <div style={styles.metaLabel}>Domain snapshot</div>
+                <div style={styles.previewTitle}>{selectedPresetDomain.title}</div>
+                <p style={styles.selectionText}>{selectedPresetDomain.overview}</p>
+                <div style={styles.domainGrid}>
+                  <div style={styles.domainCard}>
+                    <div style={styles.metaLabel}>Domain</div>
+                    <p style={styles.domainText}>{selectedPresetDomain.overview}</p>
+                  </div>
+                  <div style={styles.domainCard}>
+                    <div style={styles.metaLabel}>Starting state</div>
+                    <pre style={styles.domainBlock}>{selectedPresetDomain.initial}</pre>
+                  </div>
+                  <div style={styles.domainCard}>
+                    <div style={styles.metaLabel}>Goal state</div>
+                    <pre style={styles.domainBlock}>{selectedPresetDomain.goal}</pre>
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -763,6 +826,34 @@ const styles = {
     background: "rgba(255, 255, 255, 0.08)",
     color: "#d7ecff",
     fontSize: 12,
+  },
+  domainGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: 14,
+    marginTop: 12,
+  },
+  domainCard: {
+    padding: "14px 16px",
+    borderRadius: 16,
+    background: "rgba(255, 255, 255, 0.03)",
+    border: "1px solid rgba(255, 255, 255, 0.08)",
+  },
+  domainText: {
+    margin: 0,
+    color: "var(--muted)",
+    lineHeight: 1.6,
+  },
+  domainBlock: {
+    margin: 0,
+    padding: "12px 14px",
+    borderRadius: 14,
+    background: "rgba(5, 12, 18, 0.8)",
+    color: "#dff6ff",
+    whiteSpace: "pre-wrap",
+    fontFamily: '"SFMono-Regular", "Menlo", monospace',
+    fontSize: 13,
+    lineHeight: 1.6,
   },
   submitRow: {
     marginTop: 22,
